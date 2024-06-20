@@ -51,7 +51,6 @@ sp <- spn[1]
 
 dois <- tibble(Species = character(), DOI = character(), n =numeric())
 
-
 results_file <- "DoisResults.xlsx"
 if (file.exists(results_file)) {
   dois <- read_xlsx(results_file)
