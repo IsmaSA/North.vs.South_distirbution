@@ -17,8 +17,8 @@ process_species_chunk <- function(species_chunk, df, results_file) {
       x <- occ_download(
         pred_in("taxonKey", taxon_keys),
         pred("hasCoordinate", TRUE),
-        user = "sara_sr",  # Consider more secure handling
-        pwd = "sarasantamaria1996",  # Consider more secure handling
+        user = "**", 
+        pwd = "**",  
         email = "sarita19417@gmail.com"
       )
       
@@ -29,9 +29,6 @@ process_species_chunk <- function(species_chunk, df, results_file) {
       z <- occ_download_meta(x)
       dois <- dois %>% 
         add_row(Species = df_chunk$Species, DOI = z$doi, n = z$totalRecords)      
-      # Optionally download the data immediately or later
-      # dat <- occ_download_get(z$doi, overwrite = TRUE) %>% occ_download_import()
-      
     }, error = function(e) {
       message("Error with species ", sp, ": ", e$message)
       add_row(Species = as.character(sp), DOI = NA_character_, n = NA_real_)
