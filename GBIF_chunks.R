@@ -15,9 +15,9 @@ process_species_chunk <- function(species_chunk, df, results_file) {
     x <- occ_download(
       pred_in("taxonKey", taxon_keys),
       pred("hasCoordinate", TRUE),
-      user = "sara_sr", 
-      pwd = "sarasantamaria1996",  
-      email = "sarita19417@gmail.com"
+      user = "***", 
+      pwd = "**",  
+      email = ""
     )
     
     while (occ_download_meta(x)$status != "SUCCEEDED") {
