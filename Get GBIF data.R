@@ -109,48 +109,70 @@ write_xlsx(dois, "dois1.xlsx")
 
 
 
-
 all_GBIF <- data.frame()
-# read the .zip and take tha data
-files <- list.files(pattern = z2)
-unzipped_files <- unzip(files, list = TRUE)
+counter<- 1
+files <- list.files(pattern = ".zip")
 target_file <- "occurrence.txt"
+i <- files[1]
 
-if(target_file %in% unzipped_files$Name) {
-  unzip(files, files = target_file)
+for(i in files){
+  unzipped_files <- unzip(i, list = TRUE)
+  if(target_file %in% unzipped_files$Name) {
+    unzip(i, files = target_file)
+    
+    occurrence_data <- fread(target_file)
+  } else {
+    print(paste("NA"))
+  }
+
+  cols_need <- c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
+                 "coordinateUncertaintyInMeters","coordinatePrecision","countryCode")
+  occurrence_data1 <- occurrence_data[, ..cols_need]
   
-  occurrence_data <- fread(target_file)
-} else {
-  print(paste("File", target_file, "not found in the zip archive."))
+  missing_columns <- setdiff(cols_need, names(occurrence_data1))
+  for (col in missing_columns) {
+    occurrence_data1[, (col) := NA]  
+  }
+  
+  
+  occurrence_data2 <- occurrence_data1 %>%
+    mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern'))
+  
+  distribution = unique(occurrence_data2$hemisphere)
+  records <- occurrence_data2 %>%  group_by(hemisphere) %>%   summarise(records = n()) 
+  
+  if(length(distribution) > 1){
+    dist = 'both hemisfere'
+    nort =  records %>% filter(hemisphere =="Northern")
+    north = nort$records
+    sout =  records %>% filter(hemisphere =="Southern")
+    south = sout$records
+    
+    } else{
+    dist = distribution
+    nort =  records %>% filter(hemisphere =="Northern")
+    north = nort$records
+    north <- ifelse(length(north) == 0, 0, north)
+    
+    sout =  records %>% filter(hemisphere =="Southern")
+    south = sout$records
+    south <- ifelse(length(south) == 0, 0, south)
+  }
+  
+  
+  sp = unique(occurrence_data2$species)
+
+  if(nrow(occurrence_data1)>0){ 
+    all_GBIF <- rbind(all_GBIF, data.frame(Species = sp, Distribution = dist, North_point= north, South_point = south))
+    
+    } else{ next}
+  rm(occurrence_data, occurrence_data1, occurrence_data2)
+  cat( counter, "/", length(files), "\n")
+  counter<- counter + 1
 }
 
-cols_need <- c("decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters", 
-               "year", "basisOfRecord", "countryCode")
-
-occurrence_data1 <- occurrence_data[, ..cols_need]
-
-missing_columns <- setdiff(cols_need, names(occurrence_data1))
-for (col in missing_columns) {
-  occurrence_data1[, (col) := NA]  
-}
-
-occurrence_data1$species <- sp
-occurrence_data1$GBIF_key <- df1$Key
-
-all_GBIF <- rbind(all_GBIF, occurrence_data1)
-
-
-
-
-
-
-
-occurrence_data <- dat
-
-# Latitude > 0 == North otherwise == South
-
-occurrence_data1 <- occurrence_data %>%
-  mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern'))
+write.csv2(all_GBIF,'GBIF_PC.csv')
+write.csv(all_GBIF,'GBIF_PC.csv')
 
 
 occurrence_data1 <- occurrence_data1[,c(38,98,99,224)]
