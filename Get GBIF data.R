@@ -109,13 +109,20 @@ write_xlsx(dois, "dois1.xlsx")
 
 
 
-all_GBIF <- data.frame()
+results_file <- "all_GBIF.xlsx"
+if (file.exists(results_file)) {
+  all_GBIF <- read_xlsx(results_file)
+} else {
+  all_GBIF <- data.frame()
+}
+
 counter<- 1
 files <- list.files(pattern = ".zip")
 target_file <- "occurrence.txt"
 i <- files[1]
 
 for(i in files){
+  tryCatch({
   unzipped_files <- unzip(i, list = TRUE)
   if(target_file %in% unzipped_files$Name) {
     unzip(i, files = target_file)
@@ -124,7 +131,7 @@ for(i in files){
   } else {
     print(paste("NA"))
   }
-
+  
   cols_need <- c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
                  "coordinateUncertaintyInMeters","coordinatePrecision","countryCode")
   occurrence_data1 <- occurrence_data[, ..cols_need]
@@ -134,58 +141,44 @@ for(i in files){
     occurrence_data1[, (col) := NA]  
   }
   
+  occurrence_data1<- occurrence_data1 %>% filter(!basisOfRecord %in% c("FOSSIL_SPECIMEN","PRESERVED_SPECIMEN"))
   
-  occurrence_data2 <- occurrence_data1 %>%
-    mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern'))
+  occurrence_data2 <- occurrence_data1 %>%   filter(species != "") %>% 
+    mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern')) 
   
-  distribution = unique(occurrence_data2$hemisphere)
-  records <- occurrence_data2 %>%  group_by(hemisphere) %>%   summarise(records = n()) 
+  occurrence_data3 <- occurrence_data2 %>% filter(species != "") %>% group_by(species,hemisphere) %>%
+    summarise(records = n())
   
-  if(length(distribution) > 1){
-    dist = 'both hemisfere'
-    nort =  records %>% filter(hemisphere =="Northern")
-    north = nort$records
-    sout =  records %>% filter(hemisphere =="Southern")
-    south = sout$records
-    
-    } else{
-    dist = distribution
-    nort =  records %>% filter(hemisphere =="Northern")
-    north = nort$records
-    north <- ifelse(length(north) == 0, 0, north)
-    
-    sout =  records %>% filter(hemisphere =="Southern")
-    south = sout$records
-    south <- ifelse(length(south) == 0, 0, south)
-  }
+  overall_summary <- occurrence_data3 %>%
+    group_by(species, hemisphere) %>%
+    summarise(
+      total_records = sum(records, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(species) %>%
+    summarise(
+      Distribution = if_else(all(hemisphere == "Northern"), "Northern",
+                             if_else(all(hemisphere == "Southern"), "Southern", "Both Hemispheres")),
+      North_point = sum(total_records[hemisphere == "Northern"], na.rm = TRUE),
+      South_point = sum(total_records[hemisphere == "Southern"], na.rm = TRUE),
+      .groups = "drop" ) %>% mutate(Source ="Own PC")
   
-  
-  sp = unique(occurrence_data2$species)
-
+  overall_summary$name <- i
   if(nrow(occurrence_data1)>0){ 
-    all_GBIF <- rbind(all_GBIF, data.frame(Species = sp, Distribution = dist, North_point= north, South_point = south))
+    all_GBIF <- rbind(all_GBIF, overall_summary)
+    write_xlsx(all_GBIF, results_file)
     
-    } else{ next}
-  rm(occurrence_data, occurrence_data1, occurrence_data2)
-  cat( counter, "/", length(files), "\n")
+  } else{ next}
+  rm(occurrence_data, occurrence_data1, occurrence_data2,occurrence_data3,overall_summary,records)
+  gc()
+  Sys.sleep(10)
+   cat( counter, "/", length(files), "\n")
   counter<- counter + 1
+ }, error = function(e) {
+    print(paste("F en el chat:", i, "Error:", e$message))
+  })
 }
 
-write.csv2(all_GBIF,'GBIF_PC.csv')
-write.csv(all_GBIF,'GBIF_PC.csv')
 
 
-occurrence_data1 <- occurrence_data1[,c(38,98,99,224)]
-world <- ne_countries(scale = "medium", returnclass = "sf")
-ggplot(data = world) +
-  geom_sf() +  
-  geom_point(data = occurrence_data1, aes(x = decimalLongitude, y = decimalLatitude, color = hemisphere), size = 1, alpha = 0.6) +
-  labs( x = "Longitude", y = "Latitude") +
-  scale_color_manual(values = c("Southern" = "blue", "Northern" = "red")) +  # Adjust colors as necessary
-  theme_bw()
 
-# Group by species and identify those present in both hemispheres
-bi_hemispheric_species <- occurrence_data %>%
-  group_by(species) %>%
-  summarise(hemispheres = unique(hemisphere)) %>%
-  filter(length(hemispheres) > 1)
