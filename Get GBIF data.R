@@ -68,9 +68,9 @@ for(sp in to_process){
     x <- occ_download(
       pred_in("taxonKey", df1$Key),
       pred("hasCoordinate", TRUE),
-      user = "ismaelsoto",
-      pwd = "Ismaputas123.",
-      email = "isma-sa@hotmail.com"
+      user = "***",
+      pwd = "*****",
+      email = "******"
     )
     status <- occ_download_meta(x)$status
     
@@ -109,6 +109,10 @@ write_xlsx(dois, "dois1.xlsx")
 
 
 
+getwd()
+setwd("C:/Users/Propietario/Desktop/North_vs_South_Global/GBIF_data")
+
+
 results_file <- "all_GBIF.xlsx"
 if (file.exists(results_file)) {
   all_GBIF <- read_xlsx(results_file)
@@ -119,19 +123,35 @@ if (file.exists(results_file)) {
 counter<- 1
 files <- list.files(pattern = ".zip")
 target_file <- "occurrence.txt"
-i <- files[1]
+
+processed_species <- all_GBIF$name
+to_process <- setdiff(files, processed_species)
+i <- to_process[1]
 
 for(i in files){
+  cat( counter, "/", length(files), "\n")
+  counter<- counter + 1
+  
+  if( i %in% unique(all_GBIF$name)) { next }
   tryCatch({
   unzipped_files <- unzip(i, list = TRUE)
+  if(i =="0061397-240506114902167.zip") {
+    unzip(i, files = target_file)
+    occurrence_data = fread(target_file, 
+ select = c("species", "occurrenceStatus","basisOfRecord",
+            "decimalLatitude", "decimalLongitude"), 
+                        showProgress = FALSE)
+  } else {
   if(target_file %in% unzipped_files$Name) {
     unzip(i, files = target_file)
     
-    occurrence_data <- fread(target_file)
+    occurrence_data <- fread(target_file , 
+   select = c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
+   "coordinateUncertaintyInMeters","coordinatePrecision","countryCode"))
   } else {
     print(paste("NA"))
   }
-  
+  }
   cols_need <- c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
                  "coordinateUncertaintyInMeters","coordinatePrecision","countryCode")
   occurrence_data1 <- occurrence_data[, ..cols_need]
@@ -141,7 +161,8 @@ for(i in files){
     occurrence_data1[, (col) := NA]  
   }
   
-  occurrence_data1<- occurrence_data1 %>% filter(!basisOfRecord %in% c("FOSSIL_SPECIMEN","PRESERVED_SPECIMEN"))
+  occurrence_data1<- occurrence_data1 %>% filter(!basisOfRecord %in% c("FOSSIL_SPECIMEN","PRESERVED_SPECIMEN")) %>% 
+    filter(!occurrenceStatus == "ABSENT")
   
   occurrence_data2 <- occurrence_data1 %>%   filter(species != "") %>% 
     mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern')) 
@@ -171,14 +192,10 @@ for(i in files){
   } else{ next}
   rm(occurrence_data, occurrence_data1, occurrence_data2,occurrence_data3,overall_summary,records)
   gc()
-  Sys.sleep(10)
-   cat( counter, "/", length(files), "\n")
-  counter<- counter + 1
+  Sys.sleep(5)
+
  }, error = function(e) {
     print(paste("F en el chat:", i, "Error:", e$message))
   })
 }
-
-
-
 
