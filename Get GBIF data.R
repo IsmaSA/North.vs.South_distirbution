@@ -199,3 +199,94 @@ for(i in files){
   })
 }
 
+
+#  This code is just to run for these species with fossil or preserved specimen records 
+setwd("C:/Users/Propietario/Desktop/North_vs_South_Global/GBIF_data")
+
+results_file <- "all_GBIF.xlsx"
+if (file.exists(results_file)) {
+  all_GBIF <- read_xlsx(results_file)
+} else {
+  all_GBIF <- data.frame()
+}
+
+counter<- 1
+files <- list.files(pattern = ".zip")
+target_file <- "occurrence.txt"
+
+processed_species <- all_GBIF$name
+to_process <- setdiff(files, processed_species)
+i <- to_process[1]
+
+for(i in to_process){
+  cat( counter, "/", length(files), "\n")
+  counter<- counter + 1
+  
+  if( i %in% unique(all_GBIF$name)) { next }
+  tryCatch({
+  unzipped_files <- unzip(i, list = TRUE)
+  if(i =="0061397-240506114902167.zip") {
+    unzip(i, files = target_file)
+    occurrence_data = fread(target_file, 
+ select = c("species", "occurrenceStatus","basisOfRecord",
+            "decimalLatitude", "decimalLongitude"), 
+                        showProgress = FALSE)
+  } else {
+  if(target_file %in% unzipped_files$Name) {
+    unzip(i, files = target_file)
+    
+    occurrence_data <- fread(target_file , 
+   select = c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
+   "coordinateUncertaintyInMeters","coordinatePrecision","countryCode"))
+  } else {
+    print(paste("NA"))
+  }
+  }
+  cols_need <- c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
+                 "coordinateUncertaintyInMeters","coordinatePrecision","countryCode")
+  occurrence_data1 <- occurrence_data[, ..cols_need]
+  
+  missing_columns <- setdiff(cols_need, names(occurrence_data1))
+  for (col in missing_columns) {
+    occurrence_data1[, (col) := NA]  
+  }
+  
+  # occurrence_data1<- occurrence_data1 %>% filter(!basisOfRecord %in% c("FOSSIL_SPECIMEN","PRESERVED_SPECIMEN")) %>% 
+   occurrence_data1<- occurrence_data1 %>% filter(!occurrenceStatus == "ABSENT")
+  
+  occurrence_data2 <- occurrence_data1 %>%   filter(species != "") %>% 
+    mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern')) 
+  
+  occurrence_data3 <- occurrence_data2 %>% filter(species != "") %>% group_by(species,hemisphere) %>%
+    summarise(records = n())
+  
+  overall_summary <- occurrence_data3 %>%
+    group_by(species, hemisphere) %>%
+    summarise(
+      total_records = sum(records, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    group_by(species) %>%
+    summarise(
+      Distribution = if_else(all(hemisphere == "Northern"), "Northern",
+                             if_else(all(hemisphere == "Southern"), "Southern", "Both Hemispheres")),
+      North_point = sum(total_records[hemisphere == "Northern"], na.rm = TRUE),
+      South_point = sum(total_records[hemisphere == "Southern"], na.rm = TRUE),
+      .groups = "drop" ) %>% mutate(Source ="Own PC") %>% mutate(Note ="Only fossils or preserved specimen")
+  
+  overall_summary$name <- i
+  if(nrow(occurrence_data1)>0){ 
+    distribution <- rbind(distribution, overall_summary)
+    write_xlsx(distribution, "Distribution_fossil_preserved.xlsx")
+    
+  } else{ next}
+  rm(occurrence_data, occurrence_data1, occurrence_data2,occurrence_data3,overall_summary,records)
+  gc()
+  Sys.sleep(1)
+
+ }, error = function(e) {
+    print(paste("F en el chat:", i, "Error:", e$message))
+  })
+}
+
+saveRDS(all_GBIF, "GBIF_distribution_PC.rds")
