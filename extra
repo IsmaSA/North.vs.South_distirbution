@@ -1,0 +1,57 @@
+
+results_file <- "records_GBIF1.xlsx"
+if (file.exists(results_file)) {
+  records_GBIF1 <- read_xlsx(results_file)
+} else {
+  records_GBIF1 <- data.frame()
+}
+
+counter<- 1
+files <- list.files(pattern = ".zip")[5000:10000]
+target_file <- "occurrence.txt"
+i <- files[1]
+
+for(i in files){
+
+  tryCatch({
+    unzipped_files <- unzip(i, list = TRUE)
+    if(target_file %in% unzipped_files$Name) {
+      unzip(i, files = target_file)
+      
+      occurrence_data <- fread(target_file)
+    } else {
+      print(paste("NA"))
+    }
+    
+    cols_need <- c("species","acceptedTaxonKey","year", "occurrenceStatus","basisOfRecord","hasCoordinate","decimalLatitude", "decimalLongitude",
+                   "coordinateUncertaintyInMeters","coordinatePrecision","countryCode")
+    occurrence_data1 <- occurrence_data[, ..cols_need]
+    
+    missing_columns <- setdiff(cols_need, names(occurrence_data1))
+    for (col in missing_columns) {
+      occurrence_data1[, (col) := NA]  
+    }
+    
+    #occurrence_data1<- occurrence_data1 %>% filter(!basisOfRecord %in% c("FOSSIL_SPECIMEN","PRESERVED_SPECIMEN"))
+    
+    overall_summary <- occurrence_data1 %>% mutate(Source ="PC FROV")
+    overall_summary$name <- i
+    
+    if(nrow(occurrence_data1)>0){ 
+      records_GBIF1 <- rbind(records_GBIF1, overall_summary)
+      #  write_xlsx(records_GBIF, path = results_file)
+      saveRDS(records_GBIF1, 'records_GBIF1.rds')
+      
+    } else{ next}
+    rm(occurrence_data, occurrence_data1,overall_summary)
+    gc()
+    Sys.sleep(5)
+    cat( counter, "/", length(files), "\n")
+    counter<- counter + 1
+  }, error = function(e) {
+    print(paste("F en el chat:", i, "Error:", e$message))
+  })
+}
+
+
+rds= readRDS('records_GBIF.rds')
