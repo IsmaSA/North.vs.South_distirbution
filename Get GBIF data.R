@@ -290,3 +290,67 @@ for(i in to_process){
 }
 
 saveRDS(all_GBIF, "GBIF_distribution_PC.rds")
+
+
+
+
+
+
+
+
+
+
+d = read_xlsx("Species_distribution (version 1).xlsx")
+d= d %>% filter(is.na(Distribution))
+spn = unique(d$Taxon)
+n = spn[1]
+
+counter = 1
+for (n in spn) {
+  tryCatch({
+    res =  read_xlsx("occ_data.xlsx")
+    
+    cat(counter, "/", length(spn), "\n")
+    counter= counter +1
+    
+    if(n %in% res$scientificName) {next }
+    sp <- occ_data(scientificName = n, hasCoordinate = TRUE, occurrenceStatus = "PRESENT",
+                   limit = 100000,basisOfRecord="OBSERVATION;HUMAN_OBSERVATION;OCCURRENCE;MACHINE_OBSERVATION;MATERIAL_SAMPLE;MATERIAL_CITATION;OCCURRENCE;LIVING_SPECIMEN")
+    sp <- sp[["data"]]
+    
+    if (is.null(sp)) {
+      overall_summary <- data.frame(scientificName = n, Distribution= NA, North_point = NA,South_point= NA,Source= "No data found",
+                                    name = "occ_data()")
+      res= rbind(res, overall_summary)
+      write_xlsx(res, "occ_data.xlsx")
+      next }
+    
+    occurrence_data2 <- sp %>% mutate(hemisphere = ifelse(decimalLatitude >= 0, 'Northern', 'Southern')) 
+    occurrence_data3 <- occurrence_data2 %>% group_by(scientificName, hemisphere) %>% summarise(records = n())
+    
+    overall_summary <- occurrence_data3 %>%
+      group_by(scientificName, hemisphere) %>%
+      summarise(
+        total_records = sum(records, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      group_by(scientificName) %>%
+      summarise(
+        Distribution = if_else(all(hemisphere == "Northern"), "Northern",
+                               if_else(all(hemisphere == "Southern"), "Southern", "Both Hemispheres")),
+        North_point = sum(total_records[hemisphere == "Northern"], na.rm = TRUE),
+        South_point = sum(total_records[hemisphere == "Southern"], na.rm = TRUE),
+        .groups = "drop" ) %>% mutate(Source ="Own PC")
+    
+    overall_summary$name <- "occ_data()"
+    res= rbind(res, overall_summary)
+    
+    write_xlsx(res, "occ_data.xlsx")
+    
+   
+  }
+  , 
+  error = function(e) {
+    cat(n, "Error: Skipping species\n")
+  })
+}
